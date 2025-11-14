@@ -1,2 +1,5 @@
+#!/bin/bash
+
 echo "hey there" > /tmp/hello
+
 echo "set -o vi" >> ~/.bashrc
