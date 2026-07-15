@@ -1,0 +1,11 @@
+export HISTSIZE=32768
+export SAVEHIST="${HISTSIZE}"
+export HISTFILESIZE="${HISTSIZE}"
+export HISTCONTROL=ignoreboth
+export VISUAL=nvim
+export EDITOR=nvim
+export LC_ALL=en_US.UTF-8
+export LANG=en_US.UTF-8
+export COMPOSE_MENU=false
+export PROMPT_COMMAND='history -a; history -c; history -r'
+export KUBECONFIG=~/.kube/config

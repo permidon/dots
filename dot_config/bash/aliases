@@ -1,0 +1,65 @@
+# Aliases
+alias ls='ls -lah --color=auto'
+alias gp='grep --fixed-string --ignore-case'
+alias pm='stat -c "%a %n" ./*'
+v() { if [ "$#" -eq 0 ]; then nvim .; else nvim "$@"; fi; }
+alias t="tmux new-session -A -s "
+alias dome="t dome"
+
+# Directories
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+
+# Git
+alias g='git'
+alias gs='g status '
+alias ga='g add .'
+alias gb='g branch '
+alias gc='g commit -m'
+alias gx='g commit -a --amend'
+alias gd='g diff'
+alias go='g checkout '
+alias gl='g lg'
+
+alias be='bundle exec'
+
+alias d='docker'
+alias dash="d exec -it dev_app bash"
+alias server="d attach dev_app"
+alias dockup="d compose up dev_app"
+alias dockdn="d compose down"
+alias dcr="d compose run"
+
+alias raspy="ssh raspy"
+alias reactor="ssh reactor"
+alias sandbox="ssh sandbox"
+alias domesh="ssh sandbox"
+alias dometun="domesh -f -N -L 8080:127.0.0.1:8080"
+alias domekil="pgrep -f 'ssh .* -L 8080:127.0.0.1:8080' | xargs -r kill"
+alias domedb="domesh -f -N -L 3306:127.0.0.1:3307"
+alias domelogs="domesh-f -N -L 5601:127.0.0.1:5601"
+
+alias usloc="sudo wg-quick up ~/.config/wireguard/us.conf"
+alias uslocx="sudo wg-quick down ~/.config/wireguard/us.conf"
+alias deloc="sudo wg-quick up ~/.config/wireguard/de.conf"
+alias delocx="sudo wg-quick down ~/.config/wireguard/de.conf"
+alias ruloc="sudo openconnect maneater.teorema.info -u user_rp --disable-ipv6"
+
+alias dump-dome="docker exec mysql /usr/bin/mysqldump -u root --password=root boardpackager4_development > ~/.bak/db/dumps/bp-wip-mysql.dump"
+alias restore-dome="cat ~/.bak/db/dumps/bp-wip-mysql.dump | docker exec -i mysql /usr/bin/mysql -u root --password=root boardpackager4_development"
+
+alias init-dome="rm ./.elasticbeanstalk/config.yml ; eb init --profile=dome"
+alias init-test="rm ./.elasticbeanstalk/config.yml ; eb init --profile=test"
+alias ssh-dome="bp-secure-connect --beanstalk --profile=dome --region=us-east-1"
+alias ssh-test="bp-secure-connect --beanstalk --profile=test --region=us-east-1"
+alias ssh-git="ssh -i ~/.ssh/BoardPackagerGitLab.pem ubuntu@git.boardpackager.com"
+
+alias deploy-dev="eb use Development --profile=test; eb deploy Development --profile=test -nh"
+alias deploy-tst1="eb use Testing1 --profile=test; eb deploy Testing1 --profile=test -nh"
+alias deploy-tst2="eb use Testing2 --profile=test; eb deploy Testing2 --profile=test -nh"
+alias deploy-stg="eb use Staging --profile=dome; eb deploy Staging --profile=dome -nh"
+alias deploy-prd="eb use Production --profile=dome; eb deploy Production --profile=dome -nh"
+
+alias k="kubectl"
+alias hqp="cd ~/src/services/hqplayer/; docker compose restart hqplayer; cd"

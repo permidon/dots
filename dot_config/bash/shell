@@ -1,0 +1,13 @@
+# History control
+shopt -s histappend
+PROMPT_COMMAND='history -a; history -c; history -r'
+
+# Autocompletion
+if [[ ! -v BASH_COMPLETION_VERSINFO && -f /usr/share/bash-completion/bash_completion ]]; then
+  source /usr/share/bash-completion/bash_completion
+fi
+
+[[ -r "/usr/local/etc/profile.d/bash_completion.sh" ]] && . "/usr/local/etc/profile.d/bash_completion.sh"
+
+# Ensure command hashing is off for mise
+set +h
