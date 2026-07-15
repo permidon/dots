@@ -1,0 +1,11 @@
+[[ $- != *i* ]] && return # If not running interactively, don't do anything
+
+source ~/.config/bash/aliases
+source ~/.config/bash/envs
+source ~/.config/bash/functions
+source ~/.config/bash/init
+source ~/.config/bash/paths
+source ~/.config/bash/shell
+source ~/.config/bash/prompt
+[[ -f ~/.config/bash/private ]] && source ~/.config/bash/private
+[[ $- == *i* ]] && bind -f ~/.config/bash/inputrc
