@@ -1,15 +1,17 @@
-# Aliases
+s
 alias ls='ls -lah --color=auto'
 alias gp='grep --fixed-string --ignore-case'
 alias pm='stat -c "%a %n" ./*'
 v() { if [ "$#" -eq 0 ]; then nvim .; else nvim "$@"; fi; }
 alias t="tmux new-session -A -s "
 alias dome="t dome"
+alias services="systemctl list-units --type=service --state=running --no-legend"
 
 # Directories
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
+alias @='cd ~/Code/domecile/boardpackager/'
 
 # Git
 alias g='git'
@@ -53,7 +55,7 @@ alias init-dome="rm ./.elasticbeanstalk/config.yml ; eb init --profile=dome"
 alias init-test="rm ./.elasticbeanstalk/config.yml ; eb init --profile=test"
 alias ssh-dome="bp-secure-connect --beanstalk --profile=dome --region=us-east-1"
 alias ssh-test="bp-secure-connect --beanstalk --profile=test --region=us-east-1"
-alias ssh-git="ssh -i ~/.ssh/BoardPackagerGitLab.pem ubuntu@git.boardpackager.com"
+alias ssh-git="ssh gitlab"
 
 alias deploy-dev="eb use Development --profile=test; eb deploy Development --profile=test -nh"
 alias deploy-tst1="eb use Testing1 --profile=test; eb deploy Testing1 --profile=test -nh"
@@ -62,4 +64,4 @@ alias deploy-stg="eb use Staging --profile=dome; eb deploy Staging --profile=dom
 alias deploy-prd="eb use Production --profile=dome; eb deploy Production --profile=dome -nh"
 
 alias k="kubectl"
-alias hqp="cd ~/src/services/hqplayer/; docker compose restart hqplayer; cd"
+alias hqp="cd ~/Code/hqplayer-docker/; docker compose restart hqplayer; cd -"

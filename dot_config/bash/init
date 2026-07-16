@@ -27,12 +27,7 @@ if command -v brew &> /dev/null; then
   eval "$(brew shellenv)"
 fi
 
-if /home/linuxbrew/.linuxbrew/bin/brew -v &> /dev/null; then
-  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)"
-fi
-
 if command -v kubectl &> /dev/null; then
   source <(kubectl completion bash)
   complete -o default -F __start_kubectl k
 fi
-
