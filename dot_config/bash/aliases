@@ -1,4 +1,4 @@
-s
+# Aliases
 alias ls='ls -lah --color=auto'
 alias gp='grep --fixed-string --ignore-case'
 alias pm='stat -c "%a %n" ./*'
