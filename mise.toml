@@ -1,2 +1,4 @@
 [tools]
 chezmoi = "latest"
+neovim = "latest"
+tmux = "latest"
