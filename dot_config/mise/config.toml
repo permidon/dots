@@ -1,0 +1,12 @@
+[tools]
+chezmoi = "latest"
+bat = "latest"
+ripgrep = "latest"
+lsd = "latest"
+fzf = "latest"
+fd = "latest"
+neovim = "latest"
+# node = "latest"
+# ruby = "3.4"
+# "gem:rubocop" = "latest"
+# usage = "latest"   # for mise completion
