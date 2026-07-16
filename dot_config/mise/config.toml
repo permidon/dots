@@ -1,11 +1,11 @@
 [tools]
 chezmoi = "latest"
-bat = "latest"
+neovim = "latest"
 ripgrep = "latest"
+bat = "latest"
 lsd = "latest"
 fzf = "latest"
 fd = "latest"
-neovim = "latest"
 node = "latest"
 python = "latest"
-# usage = "latest"   # for mise completion
+usage = "latest"   # for mise completion
