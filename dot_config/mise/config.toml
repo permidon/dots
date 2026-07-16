@@ -7,5 +7,5 @@ fzf = "latest"
 fd = "latest"
 neovim = "latest"
 node = "latest"
-python3 = "latest"
+python = "latest"
 # usage = "latest"   # for mise completion
