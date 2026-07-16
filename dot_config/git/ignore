@@ -1,0 +1,55 @@
+# Environment normalization:
+/.bundle
+/vendor/bundle
+/.capistrano
+/coverage
+.rspec
+
+# SQLite database
+/db/*.sqlite3
+/db/*.sqlite3-journal
+
+# Log and Temp
+/log
+/tmp
+
+# Editors
+.idea
+.vim
+*.sublime-project
+*.sublime-workspace
+/.vscode
+
+# Node
+/node_modules
+
+# React
+/dist
+/semantic
+
+# Rails
+/spec/tmp
+/doc/examples
+config/database.yml
+config/private_pub.yml
+/config/application.yml
+/public/system
+/public/tmp
+/public/uploads
+/public/spec
+
+# Mac OS files
+.DS_Store
+
+# Pow environment settings
+.powrc
+.powenv
+
+# Sphinx
+config/*.sphinx.conf
+db/sphinx
+
+# Other
+.yardoc
+.zeus.sock
+dump.rdb

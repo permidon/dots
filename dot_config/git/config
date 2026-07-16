@@ -1,0 +1,36 @@
+[user]
+  name  = Roman Perminov
+  email = permidon@me.com
+
+[color]
+  diff   = auto
+  status = auto
+  branch = auto
+  ui     = true
+
+[core]
+  editor       = vim
+  autocrlf     = input
+  safecrlf     = false
+
+[apply]
+  whitespace = nowarn
+
+[mergetool]
+  keepBackup = false
+
+[difftool]
+  prompt = false
+
+[help]
+  autocorrect = 1
+
+[pull]
+  default = current
+  rebase = true
+
+[push]
+  default = current
+
+# [commit]
+#   gpgsign = true
