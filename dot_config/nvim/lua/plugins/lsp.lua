@@ -83,7 +83,7 @@ return {
       -- ════════════════════════════════════════════════════════════════════
       vim.diagnostic.config({
         virtual_text = true,
-        underline = true,
+        underline = false,
         update_in_insert = false,
         severity_sort = true,
         float = { border = "rounded", source = true, header = "", prefix = "" },
@@ -201,6 +201,7 @@ return {
           "yamlls",
           -- Linters
           "eslint_d",
+          "rubocop",
           "shellcheck",
           "markdownlint",
           "yamllint",
