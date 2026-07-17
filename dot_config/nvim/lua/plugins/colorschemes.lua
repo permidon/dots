@@ -2,7 +2,7 @@ return {
 	{
 		"catppuccin/nvim",
 		priority = 150,
-		name = "catbox",
+		name = "catppuccin",
 		config = function()
 			require("catppuccin").setup({
 				background = {
@@ -354,7 +354,13 @@ return {
 			vim.api.nvim_set_hl(0, "NavicText", { default = true, bg = "none", fg = "#eedaad" })
 			vim.api.nvim_set_hl(0, "NavicSeparator", { default = true, bg = "none", fg = "#eedaad" })
 			--
-			vim.api.nvim_command("colorscheme catbox")
+			vim.api.nvim_command("colorscheme catppuccin")
 		end,
+	},
+	{
+		"LazyVim/LazyVim",
+		opts = {
+			colorscheme = "catppuccin",
+		},
 	},
 }
