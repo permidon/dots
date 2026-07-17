@@ -12,6 +12,7 @@ alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
 alias @='cd ~/Code/domecile/boardpackager/'
+alias -='cd -'
 
 # Git
 alias g='git'
