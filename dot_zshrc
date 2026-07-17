@@ -1,3 +1,24 @@
+# ~~~~~~~~~~~~~~~ SSH ~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+# Using GPG + YubiKey for ssh.
+# Don't execute when in dev container
+
+
+if [[ -z "$REMOTE_CONTAINERS" && -z "$CODESPACES" && -z "$DEVCONTAINER_TYPE" ]]; then
+  export GPG_TTY="$(tty)"
+  unset SSH_AGENT_PID
+
+  if [ "${gnupg_SSH_AUTH_SOCK_by:-0}" -ne $$ ]; then
+  export SSH_AUTH_SOCK="$(gpgconf --list-dirs agent-ssh-socket)"
+  fi
+
+  gpgconf --launch gpg-agent
+  gpg-connect-agent updatestartuptty /bye > /dev/null 2>&1
+
+fi
+
+
 # ~~~~~~~~~~~~~~~ History ~~~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -5,9 +26,10 @@ HISTFILE="$HOME/.zsh_history"
 HISTSIZE=100000
 SAVEHIST=100000
 
-setopt HIST_IGNORE_SPACE
-setopt HIST_IGNORE_DUPS
-setopt SHARE_HISTORY
+setopt HIST_IGNORE_SPACE  # Don't save when prefixed with space
+setopt HIST_IGNORE_DUPS   # Don't save duplicate lines
+setopt SHARE_HISTORY      # Share history between sessions
+
 
 # ~~~~~~~~~~~~~~~ Prompt ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -39,6 +61,12 @@ fi
 
 export LANG="en_US.UTF-8"
 
+export REPOS="$HOME/Repos"
+export GITUSER="permidon"
+export GHREPOS="$REPOS/github.com/$GITUSER"
+export DOTFILES="$HOME/.local/share/chezmoi"
+export SCRIPTS="$DOTFILES/scripts"
+
 
 # ~~~~~~~~~~~~~~~ Mise ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -48,10 +76,35 @@ if command -v mise > /dev/null ; then
 fi
 
 
+
+# ~~~~~~~~~~~~~~~ Path configuration ~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+setopt extended_glob null_glob
+
+path=(
+    $path                           # Keep existing PATH entries
+    $HOME/bin
+    $HOME/.local/bin
+    $SCRIPTS
+    /home/vscode/.local/bin         # Dev Container Specifics
+    /root/.local/bin                # Dev Container Specifics
+)
+
+# Remove duplicate entries and non-existent directories
+typeset -U path
+path=($^path(N-/))
+
+export PATH
+
+
 # ~~~~~~~~~~~~~~~ Completion ~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-autoload -Uz compinit && compinit
+autoload -Uz compinit
+compinit -u
+
+zstyle ':completion:*' menu select
 
 if command -v fzf > /dev/null ; then
   source <(fzf --zsh)
@@ -71,8 +124,18 @@ fi
 
 
 alias v=nvim
+alias k='kubectl'
+alias c="clear"
+alias e='exit'
+
 alias gp="git pull"
+alias gs='git status'
+alias gd='git diff'
 alias lg=lazygit
+alias ds='devpod ssh'
+
+alias dot='cd $DOTFILES'
+alias lab='cd $HOMELAB'
 
 if command -v bat > /dev/null ; then
   alias cat="bat"
@@ -84,4 +147,12 @@ if command -v lsd > /dev/null ; then
   alias la='ls -lathr'
   alias lla='ls -lgha'
   alias lt='ls --tree'
+fi
+
+alias syu='sudo pacman -Syu'
+
+
+source "$HOME/.aliases"
+if [ -f "$HOME/.privaterc" ]; then
+  source "$HOME/.privaterc"
 fi

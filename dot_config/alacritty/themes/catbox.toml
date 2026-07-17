@@ -1,0 +1,35 @@
+[colors]
+# Primary colors
+primary = { background = "0x1d2021", foreground = "0xebdbb2" }
+
+# Normal colors
+[colors.normal]
+black   = "0x1d2021"
+red     = "0xea6962"
+green   = "0xa9b665"
+yellow  = "0xd8a657"
+blue    = "0x7daea3"
+magenta = "0xa89984"
+cyan    = "0x8ec07c"
+white   = "0xebdbb2"
+
+# Bright colors
+[colors.bright]
+black   = "0x73675e"
+red     = "0x93201d"
+green   = "0x605c1b"
+yellow  = "0x91611b"
+blue    = "0x414f4a"
+magenta = "0x514a41"
+cyan    = "0x45603e"
+white   = "0xebdbb2"
+
+# Cursor colors
+[colors.cursor]
+text   = "0x1d2021"
+cursor = "0xebdbb2"
+
+# Selection colors
+[colors.selection]
+text       = "0xebdbb2"
+background = "0x83a598"
