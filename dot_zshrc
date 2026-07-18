@@ -1,34 +1,18 @@
-# ~~~~~~~~~~~~~~~ SSH ~~~~~~~~~~~~~~~~~~~~~~~~
-
-
-# Using GPG + YubiKey for ssh.
-# Don't execute when in dev container
-
-
-if [[ -z "$REMOTE_CONTAINERS" && -z "$CODESPACES" && -z "$DEVCONTAINER_TYPE" ]]; then
-  export GPG_TTY="$(tty)"
-  unset SSH_AGENT_PID
-
-  if [ "${gnupg_SSH_AUTH_SOCK_by:-0}" -ne $$ ]; then
-  export SSH_AUTH_SOCK="$(gpgconf --list-dirs agent-ssh-socket)"
-  fi
-
-  gpgconf --launch gpg-agent
-  gpg-connect-agent updatestartuptty /bye > /dev/null 2>&1
-
-fi
-
-
 # ~~~~~~~~~~~~~~~ History ~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 HISTFILE="$HOME/.zsh_history"
 HISTSIZE=100000
 SAVEHIST=100000
+HISTCONTROL=ignoreboth
 
 setopt HIST_IGNORE_SPACE  # Don't save when prefixed with space
 setopt HIST_IGNORE_DUPS   # Don't save duplicate lines
 setopt SHARE_HISTORY      # Share history between sessions
+
+# Key bindings
+bindkey '^[[A' history-beginning-search-backward
+bindkey '^[[B' history-beginning-search-forward
 
 
 # ~~~~~~~~~~~~~~~ Prompt ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -72,9 +56,8 @@ export SCRIPTS="$DOTFILES/scripts"
 
 
 if command -v mise > /dev/null ; then
-  eval "$($HOME/.local/bin/mise activate zsh)"
+  eval "$(mise activate zsh)"
 fi
-
 
 
 # ~~~~~~~~~~~~~~~ Path configuration ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -105,6 +88,7 @@ autoload -Uz compinit
 compinit -u
 
 zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list '' 'm:{a-zA-Z}={A-Za-z}'
 
 if command -v fzf > /dev/null ; then
   source <(fzf --zsh)
@@ -113,7 +97,6 @@ fi
 if command -v flux > /dev/null ; then
   source <(flux completion zsh)
 fi
-
 
 if command -v mise > /dev/null ; then
   source <(mise completion zsh)
@@ -151,8 +134,8 @@ fi
 
 alias syu='sudo pacman -Syu'
 
-
 source "$HOME/.aliases"
+
 if [ -f "$HOME/.privaterc" ]; then
   source "$HOME/.privaterc"
 fi
