@@ -10,10 +10,6 @@ setopt HIST_IGNORE_SPACE  # Don't save when prefixed with space
 setopt HIST_IGNORE_DUPS   # Don't save duplicate lines
 setopt SHARE_HISTORY      # Share history between sessions
 
-# Key bindings
-bindkey '^[[A' history-beginning-search-backward
-bindkey '^[[B' history-beginning-search-forward
-
 
 # ~~~~~~~~~~~~~~~ Prompt ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -33,6 +29,10 @@ prompt pure
 # enable zsh vi-mode
 bindkey -v
 export KEYTIMEOUT=1 # make switching between modes faster
+
+# Key bindings
+bindkey '^[[A' history-beginning-search-backward
+bindkey '^[[B' history-beginning-search-forward
 
 
 # ~~~~~~~~~~~~~~~ Environment Variables ~~~~~~~~~~~~~~~~~~~~~~~~
