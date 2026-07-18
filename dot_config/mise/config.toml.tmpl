@@ -5,7 +5,9 @@ ripgrep = "latest"
 bat = "latest"
 lsd = "latest"
 fzf = "latest"
-fd = "latest"
 node = "latest"
 python = "latest"
 usage = "latest"   # for mise completion
+{{- if not (and (eq .chezmoi.os "darwin") (eq .chezmoi.arch "amd64")) }}
+fd = "latest"
+{{- end }}
