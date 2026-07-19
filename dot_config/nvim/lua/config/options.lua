@@ -22,7 +22,7 @@ vim.g.loaded_ruby_provider = 0 -- Disable Ruby provider
 -- Editor Behavior
 -- ============================================================================
 vim.opt.mouse = "a" -- Enable mouse support in all modes
-vim.opt.clipboard = "unnamedplus" -- Use system clipboard for all yank/paste operations
+vim.opt.clipboard = vim.env.SSH_CONNECTION and "" or "unnamedplus" -- Use system clipboard for all yank/paste operations
 vim.opt.undofile = true -- Persist undo history to disk between sessions
 vim.opt.undodir = vim.fn.stdpath("data") .. "/undo" -- Directory to store undo files
 vim.opt.updatetime = 100 -- Time in ms before CursorHold event triggers (affects plugins)
@@ -47,7 +47,7 @@ vim.opt.ruler = true -- Show cursor position in command line
 vim.opt.showtabline = 0 -- Never show the tab line
 vim.opt.cmdheight = 1 -- Height of command line area
 vim.opt.pumheight = 10 -- Maximum height of popup menu
-vim.opt.fillchars = { eob = " " } -- Hide ~ characters on empty lines
+vim.opt.fillchars:append({ eob = " " }) -- Hide ~ characters on empty lines
 vim.o.winborder = "rounded" -- Use rounded borders for floating windows
 
 -- ============================================================================
@@ -74,7 +74,6 @@ vim.opt.splitright = true -- Open vertical splits to the right of current window
 -- ============================================================================
 -- Files
 -- ============================================================================
-vim.opt.fileencoding = "utf-8" -- File encoding for new files
 vim.opt.backup = false -- Don't create backup files before overwriting
 vim.opt.writebackup = false -- Don't create backup while editing
 vim.opt.swapfile = false -- Don't create swap files
@@ -98,15 +97,15 @@ vim.g.snacks_animate = false
 -- Filetype Detection
 -- ============================================================================
 vim.filetype.add({
-  extension = {
-    env = "dotenv", -- Treat .env extension as dotenv filetype
-  },
-  filename = {
-    [".env"] = "dotenv", -- Treat .env file as dotenv filetype
-    ["env"] = "dotenv", -- Treat env file as dotenv filetype
-  },
-  pattern = {
-    ["[jt]sconfig.*.json"] = "jsonc", -- Treat tsconfig/jsconfig files as JSONC (allows comments)
-    ["%.env%.[%w_.-]+"] = "dotenv", -- Treat .env.* files as dotenv filetype
-  },
+	extension = {
+		env = "dotenv", -- Treat .env extension as dotenv filetype
+	},
+	filename = {
+		[".env"] = "dotenv", -- Treat .env file as dotenv filetype
+		["env"] = "dotenv", -- Treat env file as dotenv filetype
+	},
+	pattern = {
+		["[jt]sconfig.*.json"] = "jsonc", -- Treat tsconfig/jsconfig files as JSONC (allows comments)
+		["%.env%.[%w_.-]+"] = "dotenv", -- Treat .env.* files as dotenv filetype
+	},
 })
