@@ -27,7 +27,9 @@ fi
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
-alias @='cd ~/Code/domecile/boardpackager/'
+alias @='cd $DOMECILE'
+alias dot='cd $DOTFILES'
+alias lab='cd $HOMELAB'
 
 # Git
 alias g='git'
