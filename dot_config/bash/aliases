@@ -2,9 +2,26 @@
 alias ls='ls -lah --color=auto'
 alias gp='grep --fixed-string --ignore-case'
 alias pm='stat -c "%a %n" ./*'
+v() { if [ "$#" -eq 0 ]; then nvim .; else nvim "$@"; fi; }
 alias t="tmux new-session -A -s "
 alias dome="t dome"
 alias services="systemctl list-units --type=service --state=running --no-legend"
+
+alias v=nvim
+alias c="clear"
+alias e='exit'
+
+if command -v bat > /dev/null ; then
+  alias cat="bat"
+fi
+
+if command -v lsd > /dev/null ; then
+  alias ls="lsd"
+  alias ll="ls -lgh"
+  alias la='ls -lathr'
+  alias lla='ls -lgha'
+  alias lt='ls --tree'
+fi
 
 # Directories
 alias ..='cd ..'
