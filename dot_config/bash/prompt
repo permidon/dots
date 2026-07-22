@@ -2,34 +2,42 @@
 force_color_prompt=yes
 color_prompt=yes
 
+# Colors (Pure-style)
+c_reset="\[\e[0m\]"
+c_path="\[\e[0;34m\]"     # blue  - cwd
+c_user="\[\e[38;2;108;108;108m\]"   # truecolor, exact match to reference grey
+c_branch="\[\e[38;2;108;108;108m\]"   # bright black (grey) - basic ANSI
+c_dirty="\[\e[38;5;218m\]"   # 256-color ANSI, closest match to reference pink
+c_ok="\[\e[0;35m\]"       # magenta (basic ANSI - respects terminal theme)
+c_err="\[\e[0;31m\]"      # red   - prompt char, error
+
 # Determine git branch name
 function parse_git_branch {
-  git branch 2>/dev/null | sed -n 's/^\* //p'
+  git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null
 }
 
 # Determine git repository status
 function is_git_dirty {
-  [[ -n "$(git status --porcelain)" ]]
+  [[ -n "$(git status --porcelain 2>/dev/null)" ]]
 }
 
-# Check if in a git repository and set the prompt accordingly
 function set_git_prompt {
-  branch=$(parse_git_branch)
-  if [[ -n ${branch} ]]; then
-    if is_git_dirty; then
-      PS1="\[\e[0;36m\]\W\[\e[m\]\[\e[0;37m\] [${branch_color_dirty}${branch}\[\e[0;37m\]]\[\e[m\] » "
-    else
-      PS1="\[\e[0;36m\]\W\[\e[m\]\[\e[0;37m\] [${branch_color_clean}${branch}\[\e[0;37m\]]\[\e[m\] » "
-    fi
-  else
-    PS1="\[\e[0;36m\]\W\[\e[m\] » "
-  fi
-}
+  local exit_code=$?   # must be captured first, before anything else runs
 
-# Specify the color for the branch name
-branch_color_clean="\[\e[0;32m\]" # Green
-# branch_color_clean="\[\e[0;37m\]" # White
-branch_color_dirty="\[\e[0;31m\]" # Red
+  local branch
+  branch=$(parse_git_branch)
+
+  local git_segment=""
+  if [[ -n ${branch} ]]; then
+    git_segment=" ${c_branch}${branch}${c_reset}"
+    is_git_dirty && git_segment+="${c_dirty}*${c_reset}"
+  fi
+
+  local arrow_color=${c_ok}
+  [[ ${exit_code} -ne 0 ]] && arrow_color=${c_err}
+
+  PS1="${c_user}\u@\h ${c_path}\w${c_reset}${git_segment}\n${arrow_color}❯${c_reset} "
+}
 
 PROMPT_COMMAND=set_git_prompt
 
