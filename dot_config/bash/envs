@@ -13,4 +13,5 @@ export REPOS="$HOME/Code"
 export HOMELAB="$REPOS/homelab"
 export DOMECILE="$REPOS/domecile/boardpackager"
 export DOTFILES="$HOME/.local/share/chezmoi"
+export TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache
 export SCRIPTS="$DOTFILES/scripts"
