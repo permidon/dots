@@ -1,0 +1,270 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Scales non-prod EB environments and their RDS clusters up or down.
+#
+# Down: sets EB ASG min/desired to 0, then stops RDS cluster only if no
+#       other environment sharing that cluster is still running.
+# Up:   starts RDS cluster, waits for it, then sets EB ASG min/desired to 1.
+#
+# RDS cluster is discovered automatically from the EB environment's config
+# by scanning for any value containing an Aurora cluster endpoint.
+PROFILE="test"
+REGION="us-east-1"
+DIRECTION=""
+TARGET_ENVS=()
+APP_NAME=""
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") <up|down> [options]
+  up|down              Required: direction to scale
+  -e, --env NAME       Target environment (repeatable; required)
+  -p, --profile NAME   AWS profile from ~/.aws/config (default: test)
+  -r, --region NAME    AWS region (default: us-east-1)
+  -h, --help           Show this help
+Examples:
+  $(basename "$0") down --env development --env testing1 --env testing2
+  $(basename "$0") up --env staging --profile staging-profile
+EOF
+  exit 1
+}
+log()  { echo "    $(date '+%H:%M:%S') $*" >&2; }
+step() { echo "" >&2; echo "==> $*" >&2; }
+warn() { echo "    [warn] $*" >&2; }
+die()  { echo "    [error] $*" >&2; exit 1; }
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    up|down)       DIRECTION="$1"; shift ;;
+    -e|--env)      TARGET_ENVS+=("$2"); shift 2 ;;
+    -p|--profile)  PROFILE="$2"; shift 2 ;;
+    -r|--region)   REGION="$2"; shift 2 ;;
+    -h|--help)     usage ;;
+    *)             die "Unknown argument: $1" ;;
+  esac
+done
+[[ -z "$DIRECTION" ]] && { echo "Error: direction (up/down) required"; usage; }
+[[ ${#TARGET_ENVS[@]} -eq 0 ]] && { echo "Error: at least one --env required"; usage; }
+AW() { aws --profile "$PROFILE" --region "$REGION" "$@"; }
+# ── Discovery ────────────────────────────────────────────────────────────────
+eb_app_name() {
+  AW elasticbeanstalk describe-environments \
+    --environment-names "$1" \
+    --query 'Environments[0].ApplicationName' \
+    --output text 2>/dev/null
+}
+eb_asg_name() {
+  AW elasticbeanstalk describe-environment-resources \
+    --environment-name "$1" \
+    --query 'EnvironmentResources.AutoScalingGroups[0].Name' \
+    --output text 2>/dev/null
+}
+# Scans all EB env var values for an Aurora cluster endpoint (.cluster-*).
+# Works whether the app uses DB_HOST, DATABASE_URL, or any other variable name.
+# Falls back to VPC-based discovery if no endpoint is found in env vars.
+# Pass already-assigned cluster IDs as extra args to exclude them from VPC results.
+rds_cluster_id() {
+  local env=$1 app=$2
+  shift 2
+  local exclude=("$@")
+  local cluster
+  cluster=$(AW elasticbeanstalk describe-configuration-settings \
+    --application-name "$app" \
+    --environment-name "$env" \
+    --query "ConfigurationSettings[0].OptionSettings[].Value" \
+    --output text 2>/dev/null \
+  | tr '\t' '\n' \
+  | grep -oP '[a-zA-Z0-9_-]+(?=\.cluster(-ro)?-[a-z0-9]+\.[a-z0-9-]+\.rds\.amazonaws\.com)' \
+  | head -1 || true)
+  [[ -n "$cluster" ]] && echo "$cluster" && return
+  # Fallback: find by VPC, excluding clusters already matched to other envs
+  local vpc
+  vpc=$(AW elasticbeanstalk describe-configuration-settings \
+    --application-name "$app" \
+    --environment-name "$env" \
+    --query "ConfigurationSettings[0].OptionSettings[?Namespace=='aws:ec2:vpc'&&OptionName=='VPCId'].Value|[0]" \
+    --output text 2>/dev/null || true)
+  [[ -z "$vpc" || "$vpc" == "None" ]] && return
+  log "  $env: no RDS endpoint in config — searching by VPC ($vpc)"
+  rds_cluster_by_vpc "$vpc" "${exclude[@]:-}"
+}
+# Fetched once and reused across all VPC fallback lookups
+RDS_CLUSTERS_CACHE=""
+rds_cluster_by_vpc() {
+  local vpc=$1
+  shift
+  local exclude=("$@")
+  if [[ -z "$RDS_CLUSTERS_CACHE" ]]; then
+    RDS_CLUSTERS_CACHE=$(AW rds describe-db-clusters \
+      --query 'DBClusters[*].[DBClusterIdentifier,DBSubnetGroup]' \
+      --output text 2>/dev/null || true)
+  fi
+  local candidates=()
+  while IFS=$'\t' read -r cluster_id subnet_group; do
+    [[ -z "$cluster_id" ]] && continue
+    local skip=false
+    for ex in "${exclude[@]:-}"; do [[ "$cluster_id" == "$ex" ]] && { skip=true; break; }; done
+    $skip && continue
+    local cluster_vpc
+    cluster_vpc=$(AW rds describe-db-subnet-groups \
+      --db-subnet-group-name "$subnet_group" \
+      --query 'DBSubnetGroups[0].VpcId' \
+      --output text 2>/dev/null || true)
+    [[ "$cluster_vpc" == "$vpc" ]] && candidates+=("$cluster_id")
+  done <<< "$RDS_CLUSTERS_CACHE"
+  if [[ ${#candidates[@]} -eq 1 ]]; then
+    echo "${candidates[0]}"
+  elif [[ ${#candidates[@]} -gt 1 ]]; then
+    warn "Multiple clusters found in VPC $vpc: ${candidates[*]} — add DB endpoint to EB env vars to disambiguate"
+  fi
+}
+cluster_status() {
+  AW rds describe-db-clusters \
+    --db-cluster-identifier "$1" \
+    --query 'DBClusters[0].Status' \
+    --output text 2>/dev/null
+}
+asg_desired() {
+  AW autoscaling describe-auto-scaling-groups \
+    --auto-scaling-group-names "$1" \
+    --query 'AutoScalingGroups[0].DesiredCapacity' \
+    --output text 2>/dev/null || echo "0"
+}
+# ── Actions ──────────────────────────────────────────────────────────────────
+scale_asg() {
+  local asg=$1 min=$2 desired=$3
+  log "ASG $asg → min=$min desired=$desired"
+  AW autoscaling update-auto-scaling-group \
+    --auto-scaling-group-name "$asg" \
+    --min-size "$min" \
+    --desired-capacity "$desired" > /dev/null
+}
+# Returns true if any non-target env sharing this cluster still has running instances.
+cluster_has_active_peers() {
+  local cluster=$1
+  for env in "${ALL_ENVS[@]}"; do
+    [[ "${ALL_ENV_CLUSTERS[$env]:-}" != "$cluster" ]] && continue
+    # Skip envs we're currently scaling down
+    local is_target=false
+    for t in "${TARGET_ENVS[@]}"; do
+      [[ "$t" == "$env" ]] && { is_target=true; break; }
+    done
+    $is_target && continue
+    local asg="${ALL_ENV_ASGS[$env]:-}"
+    [[ -z "$asg" ]] && continue
+    local desired
+    desired=$(asg_desired "$asg")
+    if [[ "$desired" -gt 0 ]]; then
+      log "RDS $cluster kept running — $env still has $desired instance(s)"
+      return 0
+    fi
+  done
+  return 1
+}
+stop_cluster() {
+  local cluster=$1
+  local status
+  status=$(cluster_status "$cluster")
+  case "$status" in
+    stopped|stopping) log "RDS $cluster already $status — skipping" ;;
+    *)
+      log "Stopping RDS cluster $cluster (was: $status)"
+      AW rds stop-db-cluster --db-cluster-identifier "$cluster" > /dev/null
+      ;;
+  esac
+}
+start_cluster() {
+  local cluster=$1
+  local status
+  status=$(cluster_status "$cluster")
+  case "$status" in
+    available) log "RDS $cluster already available — skipping" ;;
+    *)
+      log "Starting RDS cluster $cluster (was: $status)"
+      AW rds start-db-cluster --db-cluster-identifier "$cluster" > /dev/null
+      ;;
+  esac
+}
+wait_cluster() {
+  log "Waiting for RDS cluster $1 to become available..."
+  AW rds wait db-cluster-available --db-cluster-identifier "$1"
+  log "RDS cluster $1 ready"
+}
+# ── Collect metadata for ALL envs ────────────────────────────────────────────
+# We need the full picture to decide whether a shared cluster is safe to stop.
+step "Discovering EB environments (profile: $PROFILE, region: $REGION)..."
+mapfile -t ALL_ENVS < <(
+  AW elasticbeanstalk describe-environments \
+    --query 'Environments[?Status!=`Terminated`].EnvironmentName' \
+    --output text \
+  | tr '\t' '\n' | sort
+)
+[[ ${#ALL_ENVS[@]} -eq 0 ]] && die "No active EB environments found in this account/region"
+log "Found: ${ALL_ENVS[*]}"
+# Remap TARGET_ENVS to match AWS casing (user may type 'development', AWS returns 'Development')
+for i in "${!TARGET_ENVS[@]}"; do
+  for env in "${ALL_ENVS[@]}"; do
+    if [[ "${env,,}" == "${TARGET_ENVS[$i],,}" ]]; then
+      TARGET_ENVS[$i]="$env"
+      break
+    fi
+  done
+done
+declare -A ALL_ENV_ASGS
+declare -A ALL_ENV_CLUSTERS
+step "Collecting environment details..."
+for env in "${ALL_ENVS[@]}"; do
+  if [[ -z "$APP_NAME" ]]; then
+    APP_NAME=$(eb_app_name "$env")
+    [[ -z "$APP_NAME" || "$APP_NAME" == "None" ]] && die "Could not resolve EB application for env '$env'"
+    log "EB application: $APP_NAME"
+  fi
+  asg=$(eb_asg_name "$env")
+  [[ -z "$asg" || "$asg" == "None" ]] && { warn "$env: no ASG found"; continue; }
+  ALL_ENV_ASGS[$env]="$asg"
+  known_clusters=("${ALL_ENV_CLUSTERS[@]:-}")
+  cluster=$(rds_cluster_id "$env" "$APP_NAME" "${known_clusters[@]:-}")
+  [[ -n "$cluster" ]] && ALL_ENV_CLUSTERS[$env]="$cluster"
+  # Mark whether this env is a target
+  local_flag=""
+  for t in "${TARGET_ENVS[@]}"; do [[ "$t" == "$env" ]] && local_flag=" (target)"; done
+  log "$env — ASG: ${asg:-n/a} | RDS: ${cluster:-n/a}$local_flag"
+done
+# Unique clusters among target envs only (for start/stop iteration)
+declare -A TARGET_CLUSTERS
+for env in "${TARGET_ENVS[@]}"; do
+  cluster="${ALL_ENV_CLUSTERS[$env]:-}"
+  [[ -n "$cluster" ]] && TARGET_CLUSTERS[$cluster]="$env"
+done
+# ── Execute ───────────────────────────────────────────────────────────────────
+if [[ "$DIRECTION" == "down" ]]; then
+  step "Scaling down EB autoscaling groups..."
+  for env in "${TARGET_ENVS[@]}"; do
+    asg="${ALL_ENV_ASGS[$env]:-}"
+    [[ -z "$asg" ]] && continue
+    scale_asg "$asg" 0 0
+  done
+  step "Stopping RDS clusters..."
+  for cluster in "${!TARGET_CLUSTERS[@]}"; do
+    if cluster_has_active_peers "$cluster"; then
+      log "Skipping RDS $cluster — shared cluster still in use"
+    else
+      stop_cluster "$cluster"
+    fi
+  done
+else
+  step "Starting RDS clusters..."
+  for cluster in "${!TARGET_CLUSTERS[@]}"; do
+    start_cluster "$cluster"
+  done
+  step "Waiting for RDS clusters..."
+  for cluster in "${!TARGET_CLUSTERS[@]}"; do
+    wait_cluster "$cluster" &
+  done
+  wait
+  step "Scaling up EB autoscaling groups..."
+  for env in "${TARGET_ENVS[@]}"; do
+    asg="${ALL_ENV_ASGS[$env]:-}"
+    [[ -z "$asg" ]] && continue
+    scale_asg "$asg" 1 1
+  done
+fi
+step "Done — ${DIRECTION}"

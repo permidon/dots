@@ -1,0 +1,361 @@
+#!/usr/bin/python3
+import argparse
+from pathlib import Path
+import json
+import os
+from multiprocessing import Process
+import random
+import platform
+import subprocess
+import sys
+import time
+
+MAX_RANDOM = 999999999999
+SESSION_PROXY = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" if platform.system() == "Windows" else "sh -c"
+
+def define_arguments():
+  parser = argparse.ArgumentParser(description='Set up a tunnel through SessionManager and EC2 Instance Connect')
+  parser.add_argument("--instance-id", help="The EC2 Instance to connect to")
+  parser.add_argument("--beanstalk", help="If you want to use elastic beanstalk, but without an application", action="store_const", const=True)
+  parser.add_argument("--beanstalk-application", help="Use a beanstalk application. Keep blank to indicate that an environment needs to be selected. Otherwise, include the application name")
+  parser.add_argument("--beanstalk-environment")
+  parser.add_argument("--instance-os-user", help="The username on the EC2 Instance (e.g ec-user or ubuntu)", default=False)
+  parser.add_argument("--local-port", help="The port for local SSH tunneling", type=int, default=0)
+  parser.add_argument("--remote-port", help="The port for remote SSH tunneling", type=int, default=0)
+  parser.add_argument("--socks-port", help="The port for a SOCKS tunnel", type=int, default=0)
+  parser.add_argument("--target-server", help="If using as a bastion pass-through, this is the target serve. Requires also --target-port", default=False)
+  parser.add_argument("--target-port", help="If using as a bastion pass-through, this is the target port. Requires also --target-server. If not local-port is specified, local-port will automatically be set to this value as well", default=0, type=int)
+
+  parser.add_argument("--no-remote-commands", help="Equivalent to the -N argument in ssh. Do not execute remote commands", default=False, const=True, action='store_const')
+  parser.add_argument("--sftp", help="Start an SFTP session instead of SSH", default=False, const=True, action='store_const')
+  parser.add_argument("--sftp-batch", help="Path to batch file containing SFTP commands (requires --sftp)", default=False)
+  parser.add_argument("--profile", help="Your AWS Profile you wish to use")
+  parser.add_argument("--region", help="The AWS Region, if unspecified")
+  parser.add_argument("--ssh-public-key", help="The public key to use", default=False)
+  args = parser.parse_args()
+
+  # Ensure just one type of port
+  ports = [ port for port in [args.local_port, args.remote_port, args.socks_port] if port > 0]
+  if len(ports) > 1:
+    raise "Only one type of port is allowed."
+
+  if (bool(args.target_server) ^ bool(args.target_port)):
+    raise "You must have either both target-server and target-port or neither"
+
+  if args.target_server and len(ports) == 0:
+    args.local_port = args.target_port
+
+  if args.sftp and len(ports) > 0:
+    raise Exception("SFTP mode cannot be used with port forwarding options")
+
+  if args.sftp and args.target_server:
+    raise Exception("SFTP mode cannot be used with target-server/bastion mode")
+
+  if args.sftp_batch and not args.sftp:
+    raise Exception("--sftp-batch requires --sftp flag")
+
+  if args.sftp_batch and not Path(args.sftp_batch).exists():
+    raise Exception("SFTP batch file not found: {}".format(args.sftp_batch))
+
+  if not args.ssh_public_key:
+    for i, possible_file in enumerate(["id_rsa", "id_dsa", "id_ecdsa", "id_ed25519"]):
+      path = "{}/.ssh/{}.pub".format(Path.home(), possible_file)
+      if Path(path).exists():
+        args.ssh_public_key = path
+        break
+
+  if not args.ssh_public_key:
+    raise Exception("No default public SSH key found. Please explicitly supply a key")
+
+  return args
+
+def lookup_beanstalk(args, application, environment_name):
+  if not application and not environment_name:
+    command = ["aws", "elasticbeanstalk", "describe-applications"]
+    command.extend(["--output", "json"])
+    add_profile_and_region_to_aws_command(args, command)
+    res = subprocess.check_output(command)
+    command_output = json.loads(res)
+
+    applications = list(map(lambda app: app["ApplicationName"], command_output["Applications"]))
+    index = query_user_for_option_index(applications, "application", "applications")
+    application = applications[index]
+
+  if not environment_name:
+    command = ["aws", "elasticbeanstalk", "describe-environments"]
+    if application:
+      command.extend(["--application-name", application])
+
+    command.extend(["--output", "json"])
+    add_profile_and_region_to_aws_command(args, command)
+    res = subprocess.check_output(command)
+    command_output = json.loads(res)
+
+    environment_ids = list(map(lambda app: app["EnvironmentId"], command_output["Environments"]))
+    environments = list(map(lambda app: app["EnvironmentName"], command_output["Environments"]))
+    index = query_user_for_option_index(environments, "environment", "environments")
+    environment_id = environment_ids[index]
+
+
+  command = ["aws", "elasticbeanstalk", "describe-environment-resources"]
+  if environment_id:
+    command.extend(["--environment-id", environment_id])
+  if environment_name:
+    command.extend(["--environment-name", environment_name])
+  command.extend(["--output", "json"])
+  add_profile_and_region_to_aws_command(args, command)
+  res = subprocess.check_output(command)
+  command_output = json.loads(res)
+
+
+  instances = list(map(lambda app: app["Id"], command_output["EnvironmentResources"]["Instances"]))
+  index = query_user_for_option_index(instances, "instance", "instances")
+
+  return instances[index]
+
+def query_user_for_option_index(options, single, plural):
+  number_of_options = len(options)
+  if number_of_options == 0:
+    return False
+
+  if number_of_options == 1:
+    return 0
+
+  choice = 0
+  while choice <= 0 or choice > number_of_options:
+    print("From the following list of {}".format(plural))
+    for index in range(0, number_of_options):
+      print("{}: {}".format(index + 1, options[index]))
+
+    choice = input("Select the {}: ".format(single))
+    try:
+      choice = int(choice)
+    except Exception as e:
+      print("Please use the listed number")
+      choice = 0
+
+  return choice - 1
+
+
+def get_file_contents(path):
+  contents = ""
+
+  if path.exists():
+    with path.open() as f:
+      contents = f.read()
+
+  return contents
+
+def random_number():
+  return random.randint(0, MAX_RANDOM)
+
+def ssh_file_tag(unique_id, finish = False):
+  template = "# SessionManager + EC2 Instance Connect: {}".format(unique_id)
+  return template + (" -- FINISH" if finish else "")
+
+def select_random_ssh_tag(path):
+  file_contents = get_file_contents(path)
+  number = random_number()
+
+  if path.exists() and file_contents:
+    while file_contents.find(ssh_file_tag(number)) != -1:
+      number = random_number()
+
+  return number
+
+def aws_session_command(args, instance_id):
+  command = ["aws", "ssm", "start-session"]
+  command.extend(["--target", instance_id])
+  command.extend(["--document", "AWS-StartSSHSession"])
+  command.extend(["--parameters", "'portNumber=%p'"])
+
+  add_profile_and_region_to_aws_command(args, command)
+
+  return " ".join(command)
+  #command = "aws ssm start-session --target {} --document-name AWS-StartSSHSession --parameters 'portNumber=%p'".format(instance_id)
+
+  #if args.profile:
+  #  command += " --profile={}".format(args.profile)
+  #if args.region:
+  #  command += " --region={}".format(args.region)
+  #return command
+
+def generate_command_for_ssh_config(path, random_id, instance_id, args):
+  command = []
+  command.append(ssh_file_tag(unique_id = random_id))
+  command.append("host {}".format(random_id))
+  command.append("  StrictHostKeyChecking no")
+  command.append("  LogLevel ERROR")
+  command.append("  UserKnownHostsFile /dev/null")
+  command.append("  ProxyCommand {} \"{}\"".format(SESSION_PROXY, aws_session_command(args=args, instance_id=instance_id)))
+  command.append(ssh_file_tag(unique_id = random_id, finish = True))
+
+  file_contents = get_file_contents(path)
+  with path.open("w") as f:
+    f.write("\n".join(command) + "\n" + file_contents)
+
+  return len(command)
+
+def cleanup_config_file(path, unique_id, command_length):
+  start_command = ssh_file_tag(unique_id)
+  lines = get_file_contents(path).split("\n")
+
+  for index, line in enumerate(lines, start=0):
+    if line == start_command:
+      before_command = lines[0:index]
+      after_command = lines[(index+command_length):len(lines)]
+
+      with path.open("w") as f:
+        f.write("\n".join(before_command + after_command))
+
+      break
+
+def get_relevant_instance_details(args, instance_id):
+  try:
+    # First, we'll query AWS about the instance
+    command = ["aws", "ec2", "describe-instances"]
+    command.extend(["--instance-id", instance_id])
+    command.extend(["--output", "json"])
+
+    add_profile_and_region_to_aws_command(args, command)
+
+    res = subprocess.check_output(command)
+
+    # Then, we'll interpret the results
+    command_output = json.loads(res)
+    instances = command_output["Reservations"][0]["Instances"] if command_output["Reservations"] else False
+
+    if not instances:
+      raise Exception("Could not access the described instance")
+
+    out = {}
+    out["id"] = instance_id
+    out["availability-zone"] = instances[0]["Placement"]["AvailabilityZone"]
+
+    command = ["aws", "ssm", "describe-instance-information"]
+    command.extend(["--filter", "Key=InstanceIds,Values={}".format(instance_id)])
+    add_profile_and_region_to_aws_command(args, command)
+    res = subprocess.check_output(command)
+    command_output = json.loads(res)
+
+    out["platform"] = command_output["InstanceInformationList"][0]["PlatformName"]
+
+    return out
+
+  except Exception as e:
+    print(e)
+    sys.exit(1)
+
+def add_public_key_to_instance(instance_details, args):
+  command = ["aws", "ec2-instance-connect", "send-ssh-public-key"]
+  command.extend(["--instance-id", instance_details["id"]])
+  add_profile_and_region_to_aws_command(args, command)
+
+  command.extend(["--availability-zone", instance_details["availability-zone"]])
+  command.extend(["--instance-os-user", args.instance_os_user])
+
+  ssh_file_contents = False
+  try:
+    ssh_file_contents = get_file_contents(Path(args.ssh_public_key))
+  except Exception as e:
+    pass
+
+  command.extend(["--ssh-public-key", ssh_file_contents or args.ssh_public_key])
+
+  res = subprocess.check_output(command)
+
+def start_ssh_session(random_id, args):
+  command = []
+
+  if args.sftp:
+    command.append("sftp")
+    if args.sftp_batch:
+      command.extend(["-b", args.sftp_batch])
+    command.append("{}@{}".format(args.instance_os_user, random_id))
+  else:
+    command.append("ssh")
+
+    if args.no_remote_commands:
+      command.append("-N")
+
+    if args.local_port:
+      bounces = [str(args.local_port)]
+      if args.target_server and args.target_port:
+        bounces.extend([args.target_server, str(args.target_port)])
+
+      command.extend(["-L", ":".join(bounces)])
+    elif args.remote_port:
+      pass
+    elif args.socks_port:
+      command.extend(["-D", str(args.socks_port)])
+
+    command.append("{}@{}".format(args.instance_os_user, random_id))
+
+  os.system(" ".join(command))
+
+def cleanup_process_function(**kwargs):
+  try:
+    time.sleep(10)
+    cleanup_config_file(**kwargs)
+  except BaseException as e:
+    cleanup_config_file(**kwargs)
+
+
+def add_profile_and_region_to_aws_command(args, command):
+  if args.profile:
+    command.extend(["--profile", args.profile])
+  if args.region:
+    command.extend(["--region", args.region])
+
+####################
+# START OF PROGRAM #
+####################
+
+if __name__ == '__main__':
+  try:
+    args = define_arguments()
+  except BaseException as e:
+    print(str(e))
+    exit()
+
+  if args.beanstalk or args.beanstalk_application:
+    instance_id = lookup_beanstalk(args, args.beanstalk_application, args.beanstalk_environment)
+  elif args.instance_id:
+    instance_id = args.instance_id
+  else:
+    print("Need Beanstalk or EC Instance")
+    quit()
+
+  instance_details = get_relevant_instance_details(args=args, instance_id=instance_id)
+  if not args.instance_os_user:
+    args.instance_os_user = {
+      "Amazon Linux": "ec2-user",
+      "Ubuntu": "ubuntu"
+    }[instance_details["platform"]]
+
+  if not args.instance_os_user:
+    print("Could not find a default remote user")
+    quit()
+
+  config_path = Path.home() / ".ssh" / "config"
+  unique_random_id = select_random_ssh_tag(config_path)
+  command_length = generate_command_for_ssh_config(path=config_path, random_id=unique_random_id, instance_id=instance_id,args=args)
+
+  cleanup_args = { "path": config_path, "unique_id": unique_random_id, "command_length": command_length }
+
+  cleanup_process = Process(target=cleanup_process_function, kwargs=cleanup_args)
+  cleanup_process.start()
+
+  # PARENT / MAIN PROCESS
+  try:
+    res = add_public_key_to_instance( instance_details=instance_details, args=args)
+    start_ssh_session(unique_random_id, args)
+
+  except BaseException as e:
+    cleanup_config_file(**cleanup_args)
+    cleanup_process.join()
+    raise e
+
+  if cleanup_process.is_alive():
+    cleanup_process.join()
+
