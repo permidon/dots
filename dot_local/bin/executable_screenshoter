@@ -1,0 +1,93 @@
+#!/bin/bash
+# Take a screenshot of the whole screen, a specific window, or a user-drawn region.
+# Saves to ~/Pictures by default, but that can be changed via OMARCHY_SCREENSHOT_DIR or XDG_PICTURES_DIR ENVs.
+# Editor defaults to Satty but can be changed via --editor=<name> or OMARCHY_SCREENSHOT_EDITOR env
+[[ -f ~/.config/user-dirs.dirs ]] && source ~/.config/user-dirs.dirs
+OUTPUT_DIR="${OMARCHY_SCREENSHOT_DIR:-${XDG_PICTURES_DIR:-$HOME/Pictures}}"
+if [[ ! -d $OUTPUT_DIR ]]; then
+  mkdir -p "$OUTPUT_DIR"
+  notify-send "Created screenshot directory: $OUTPUT_DIR" -u normal -t 2000
+fi
+pkill slurp && exit 0
+SCREENSHOT_EDITOR="${OMARCHY_SCREENSHOT_EDITOR:-satty}"
+ARGS=()
+for arg in "$@"; do
+  if [[ $arg == --editor=* ]]; then
+    SCREENSHOT_EDITOR="${arg#--editor=}"
+  else
+    ARGS+=("$arg")
+  fi
+done
+set -- "${ARGS[@]}"
+open_editor() {
+  local filepath="$1"
+  if [[ $SCREENSHOT_EDITOR == "satty" ]]; then
+    satty --filename "$filepath" \
+      --output-filename "$filepath" \
+      --actions-on-enter save-to-clipboard \
+      --save-after-copy \
+      --copy-command 'wl-copy'
+  else
+    $SCREENSHOT_EDITOR "$filepath"
+  fi
+}
+MODE="${1:-smart}"
+PROCESSING="${2:-slurp}"
+
+get_focused_output_geo() {
+  swaymsg -t get_outputs | jq -r '.[] | select(.focused == true) | "\(.rect.x),\(.rect.y) \(.rect.width)x\(.rect.height)"'
+}
+
+get_rectangles() {
+  swaymsg -t get_tree | jq -r '
+    .. | objects | select(.pid? and .visible? and .rect?) |
+    "\(.rect.x),\(.rect.y) \(.rect.width)x\(.rect.height)"
+  '
+  get_focused_output_geo
+}
+
+case "$MODE" in
+region)
+  SELECTION=$(slurp 2>/dev/null)
+  ;;
+windows)
+  SELECTION=$(get_rectangles | slurp -r 2>/dev/null)
+  ;;
+fullscreen)
+  SELECTION=$(get_focused_output_geo)
+  ;;
+smart | *)
+  RECTS=$(get_rectangles)
+  SELECTION=$(echo "$RECTS" | slurp 2>/dev/null)
+  if [[ $SELECTION =~ ^([0-9]+),([0-9]+)[[:space:]]([0-9]+)x([0-9]+)$ ]]; then
+    if ((${BASH_REMATCH[3]} * ${BASH_REMATCH[4]} < 20)); then
+      click_x="${BASH_REMATCH[1]}"
+      click_y="${BASH_REMATCH[2]}"
+      while IFS= read -r rect; do
+        if [[ $rect =~ ^([0-9]+),([0-9]+)[[:space:]]([0-9]+)x([0-9]+) ]]; then
+          rx="${BASH_REMATCH[1]}" ry="${BASH_REMATCH[2]}"
+          rw="${BASH_REMATCH[3]}" rh="${BASH_REMATCH[4]}"
+          if ((click_x >= rx && click_x < rx + rw && click_y >= ry && click_y < ry + rh)); then
+            SELECTION="${rx},${ry} ${rw}x${rh}"
+            break
+          fi
+        fi
+      done <<<"$RECTS"
+    fi
+  fi
+  ;;
+esac
+
+[[ -z $SELECTION ]] && exit 0
+FILENAME="screenshot-$(date +'%Y-%m-%d_%H-%M-%S').png"
+FILEPATH="$OUTPUT_DIR/$FILENAME"
+if [[ $PROCESSING == "slurp" ]]; then
+  grim -g "$SELECTION" "$FILEPATH" || exit 1
+  wl-copy <"$FILEPATH"
+  (
+    ACTION=$(notify-send "Screenshot saved to clipboard and file" "Edit with Super + Alt + , (or click this)" -t 10000 -i "$FILEPATH" -A "default=edit")
+    [[ $ACTION == "default" ]] && open_editor "$FILEPATH"
+  ) &
+else
+  grim -g "$SELECTION" - | wl-copy
+fi
