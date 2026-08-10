@@ -1,0 +1,145 @@
+#!/bin/bash
+# sway-power-menu — Omarchy's system menu (super+esc → System), ported to Sway.
+#
+#   Lock / Suspend / Hibernate / Logout / Restart / Shutdown
+#
+# Hyprland → Sway translations:
+#   hyprctl dispatch exit / uwsm stop      → swaymsg exit
+#   omarchy-hyprland-window-close-all      → swaymsg [con_id=…] kill over the tree
+#   hyprlock                               → swaylock (or waylock/gtklock)
+#   walker --dmenu                         → whichever dmenu-style launcher is installed
+#
+# Env overrides:
+#   SWAY_MENU_CMD=fuzzel|wofi|rofi|bemenu|tofi|walker   force a launcher
+#   SWAY_LOCK_CMD='swaylock -f -c 000000'               force a lock command
+
+set -uo pipefail
+
+# ── launcher ────────────────────────────────────────────────────────────────
+MENU_CMD="${SWAY_MENU_CMD:-}"
+if [[ -z $MENU_CMD ]]; then
+  for c in fuzzel wofi rofi bemenu tofi walker; do
+    command -v "$c" >/dev/null 2>&1 && MENU_CMD="$c" && break
+  done
+fi
+if [[ -z $MENU_CMD ]]; then
+  notify-send -u critical "sway-power-menu" "No dmenu-style launcher found (fuzzel, wofi, rofi, bemenu, tofi, walker)" 2>/dev/null
+  exit 1
+fi
+
+menu() {
+  local prompt="$1" options="$2" lines
+  lines=$(printf '%b' "$options" | grep -c .)
+
+  case $MENU_CMD in
+  fuzzel) printf '%b' "$options" | fuzzel --dmenu --prompt "$prompt… " --lines "$lines" --width 22 ;;
+  wofi) printf '%b' "$options" | wofi --dmenu --prompt "$prompt…" --lines "$((lines + 1))" --width 295 --cache-file /dev/null ;;
+  rofi) printf '%b' "$options" | rofi -dmenu -i -p "$prompt" -lines "$lines" ;;
+  bemenu) printf '%b' "$options" | bemenu --prompt "$prompt" --list "$lines" --ignorecase ;;
+  tofi) printf '%b' "$options" | tofi --prompt-text "$prompt: " ;;
+  walker) printf '%b' "$options" | walker --dmenu --width 295 --minheight 1 --maxheight 630 -p "$prompt…" ;;
+  esac
+}
+
+# ── toggle: hitting the keybind again closes an open menu ───────────────────
+PIDFILE="${XDG_RUNTIME_DIR:-/tmp}/sway-power-menu.pid"
+if [[ -f $PIDFILE ]] && read -r old <"$PIDFILE" && [[ -n ${old:-} ]] && kill -0 "$old" 2>/dev/null; then
+  pkill -P "$old" >/dev/null 2>&1
+  kill "$old" 2>/dev/null
+  rm -f "$PIDFILE"
+  exit 0
+fi
+echo $$ >"$PIDFILE"
+trap 'rm -f "$PIDFILE"' EXIT
+
+# ── capabilities ────────────────────────────────────────────────────────────
+LOCK_CMD="${SWAY_LOCK_CMD:-}"
+if [[ -z $LOCK_CMD ]]; then
+  if command -v swaylock >/dev/null; then
+    LOCK_CMD="swaylock -f"
+  elif command -v waylock >/dev/null; then
+    LOCK_CMD="waylock"
+  elif command -v gtklock >/dev/null; then
+    LOCK_CMD="gtklock -d"
+  fi
+fi
+
+suspend_available() { grep -qw mem /sys/power/state 2>/dev/null; }
+
+hibernation_available() {
+  grep -qw disk /sys/power/state 2>/dev/null || return 1
+  [[ -n $(swapon --noheadings --show=NAME 2>/dev/null) ]]
+}
+
+# ── actions ─────────────────────────────────────────────────────────────────
+# Ask every window to close first (Chrome et al. need this to save state),
+# then run the real action a couple of seconds later, detached from this shell.
+close_all_windows() {
+  command -v jq >/dev/null 2>&1 || return 0
+  swaymsg -t get_tree |
+    jq -r '.. | objects | select(.pid != null and (.type == "con" or .type == "floating_con")) | .id' |
+    while read -r id; do
+      swaymsg "[con_id=$id]" kill >/dev/null 2>&1
+    done
+}
+
+graceful() {
+  local action="$1"
+  nohup bash -c "sleep 2 && $action" >/dev/null 2>&1 &
+  close_all_windows
+  sleep 1
+}
+
+do_lock() {
+  [[ -z $LOCK_CMD ]] && return 0
+  pgrep -x "${LOCK_CMD%% *}" >/dev/null || setsid $LOCK_CMD >/dev/null 2>&1 &
+
+  # Reset to the first keyboard layout so the password isn't typed in the wrong one
+  swaymsg 'input type:keyboard xkb_switch_layout 0' >/dev/null 2>&1
+
+  # Ensure 1Password is locked
+  pgrep -x 1password >/dev/null && 1password --lock >/dev/null 2>&1 &
+
+  return 0
+}
+
+do_logout() { graceful "swaymsg exit"; }
+do_reboot() { graceful "systemctl reboot --no-wall"; }
+do_shutdown() { graceful "systemctl poweroff --no-wall"; }
+do_suspend() {
+  do_lock
+  systemctl suspend
+}
+do_hibernate() {
+  do_lock
+  systemctl hibernate
+}
+
+# ── menu ────────────────────────────────────────────────────────────────────
+show_system_menu() {
+  local options=""
+  [[ -n $LOCK_CMD ]] && options="  Lock"
+  suspend_available && options="${options:+$options\n}󰒲  Suspend"
+  hibernation_available && options="${options:+$options\n}󰤁  Hibernate"
+  options="${options:+$options\n}󰍃  Logout\n󰜉  Restart\n󰐥  Shutdown"
+
+  run_action "$(menu "System" "$options")"
+}
+
+run_action() {
+  case "${1,,}" in
+  *lock*) do_lock ;;
+  *suspend*) do_suspend ;;
+  *hibernate*) do_hibernate ;;
+  *logout*) do_logout ;;
+  *restart* | *reboot*) do_reboot ;;
+  *shutdown* | *poweroff*) do_shutdown ;;
+  *) exit 0 ;; # cancelled
+  esac
+}
+
+if [[ -n ${1:-} ]]; then
+  run_action "$1" # e.g. `sway-power-menu shutdown` skips the menu
+else
+  show_system_menu
+fi

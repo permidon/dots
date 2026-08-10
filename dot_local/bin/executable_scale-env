@@ -27,22 +27,46 @@ Examples:
 EOF
   exit 1
 }
-log()  { echo "    $(date '+%H:%M:%S') $*" >&2; }
-step() { echo "" >&2; echo "==> $*" >&2; }
+log() { echo "    $(date '+%H:%M:%S') $*" >&2; }
+step() {
+  echo "" >&2
+  echo "==> $*" >&2
+}
 warn() { echo "    [warn] $*" >&2; }
-die()  { echo "    [error] $*" >&2; exit 1; }
+die() {
+  echo "    [error] $*" >&2
+  exit 1
+}
 while [[ $# -gt 0 ]]; do
   case $1 in
-    up|down)       DIRECTION="$1"; shift ;;
-    -e|--env)      TARGET_ENVS+=("$2"); shift 2 ;;
-    -p|--profile)  PROFILE="$2"; shift 2 ;;
-    -r|--region)   REGION="$2"; shift 2 ;;
-    -h|--help)     usage ;;
-    *)             die "Unknown argument: $1" ;;
+  up | down)
+    DIRECTION="$1"
+    shift
+    ;;
+  -e | --env)
+    TARGET_ENVS+=("$2")
+    shift 2
+    ;;
+  -p | --profile)
+    PROFILE="$2"
+    shift 2
+    ;;
+  -r | --region)
+    REGION="$2"
+    shift 2
+    ;;
+  -h | --help) usage ;;
+  *) die "Unknown argument: $1" ;;
   esac
 done
-[[ -z "$DIRECTION" ]] && { echo "Error: direction (up/down) required"; usage; }
-[[ ${#TARGET_ENVS[@]} -eq 0 ]] && { echo "Error: at least one --env required"; usage; }
+[[ -z "$DIRECTION" ]] && {
+  echo "Error: direction (up/down) required"
+  usage
+}
+[[ ${#TARGET_ENVS[@]} -eq 0 ]] && {
+  echo "Error: at least one --env required"
+  usage
+}
 AW() { aws --profile "$PROFILE" --region "$REGION" "$@"; }
 # ── Discovery ────────────────────────────────────────────────────────────────
 eb_app_name() {
@@ -70,10 +94,10 @@ rds_cluster_id() {
     --application-name "$app" \
     --environment-name "$env" \
     --query "ConfigurationSettings[0].OptionSettings[].Value" \
-    --output text 2>/dev/null \
-  | tr '\t' '\n' \
-  | grep -oP '[a-zA-Z0-9_-]+(?=\.cluster(-ro)?-[a-z0-9]+\.[a-z0-9-]+\.rds\.amazonaws\.com)' \
-  | head -1 || true)
+    --output text 2>/dev/null |
+    tr '\t' '\n' |
+    grep -oP '[a-zA-Z0-9_-]+(?=\.cluster(-ro)?-[a-z0-9]+\.[a-z0-9-]+\.rds\.amazonaws\.com)' |
+    head -1 || true)
   [[ -n "$cluster" ]] && echo "$cluster" && return
   # Fallback: find by VPC, excluding clusters already matched to other envs
   local vpc
@@ -101,7 +125,10 @@ rds_cluster_by_vpc() {
   while IFS=$'\t' read -r cluster_id subnet_group; do
     [[ -z "$cluster_id" ]] && continue
     local skip=false
-    for ex in "${exclude[@]:-}"; do [[ "$cluster_id" == "$ex" ]] && { skip=true; break; }; done
+    for ex in "${exclude[@]:-}"; do [[ "$cluster_id" == "$ex" ]] && {
+      skip=true
+      break
+    }; done
     $skip && continue
     local cluster_vpc
     cluster_vpc=$(AW rds describe-db-subnet-groups \
@@ -109,7 +136,7 @@ rds_cluster_by_vpc() {
       --query 'DBSubnetGroups[0].VpcId' \
       --output text 2>/dev/null || true)
     [[ "$cluster_vpc" == "$vpc" ]] && candidates+=("$cluster_id")
-  done <<< "$RDS_CLUSTERS_CACHE"
+  done <<<"$RDS_CLUSTERS_CACHE"
   if [[ ${#candidates[@]} -eq 1 ]]; then
     echo "${candidates[0]}"
   elif [[ ${#candidates[@]} -gt 1 ]]; then
@@ -130,12 +157,13 @@ asg_desired() {
 }
 # ── Actions ──────────────────────────────────────────────────────────────────
 scale_asg() {
-  local asg=$1 min=$2 desired=$3
-  log "ASG $asg → min=$min desired=$desired"
+  local asg=$1 min=$2 max=$3 desired=$4
+  log "ASG $asg → min=$min max=$max desired=$desired"
   AW autoscaling update-auto-scaling-group \
     --auto-scaling-group-name "$asg" \
     --min-size "$min" \
-    --desired-capacity "$desired" > /dev/null
+    --max-size "$max" \
+    --desired-capacity "$desired" >/dev/null
 }
 # Returns true if any non-target env sharing this cluster still has running instances.
 cluster_has_active_peers() {
@@ -145,7 +173,10 @@ cluster_has_active_peers() {
     # Skip envs we're currently scaling down
     local is_target=false
     for t in "${TARGET_ENVS[@]}"; do
-      [[ "$t" == "$env" ]] && { is_target=true; break; }
+      [[ "$t" == "$env" ]] && {
+        is_target=true
+        break
+      }
     done
     $is_target && continue
     local asg="${ALL_ENV_ASGS[$env]:-}"
@@ -164,11 +195,11 @@ stop_cluster() {
   local status
   status=$(cluster_status "$cluster")
   case "$status" in
-    stopped|stopping) log "RDS $cluster already $status — skipping" ;;
-    *)
-      log "Stopping RDS cluster $cluster (was: $status)"
-      AW rds stop-db-cluster --db-cluster-identifier "$cluster" > /dev/null
-      ;;
+  stopped | stopping) log "RDS $cluster already $status — skipping" ;;
+  *)
+    log "Stopping RDS cluster $cluster (was: $status)"
+    AW rds stop-db-cluster --db-cluster-identifier "$cluster" >/dev/null
+    ;;
   esac
 }
 start_cluster() {
@@ -176,11 +207,11 @@ start_cluster() {
   local status
   status=$(cluster_status "$cluster")
   case "$status" in
-    available) log "RDS $cluster already available — skipping" ;;
-    *)
-      log "Starting RDS cluster $cluster (was: $status)"
-      AW rds start-db-cluster --db-cluster-identifier "$cluster" > /dev/null
-      ;;
+  available) log "RDS $cluster already available — skipping" ;;
+  *)
+    log "Starting RDS cluster $cluster (was: $status)"
+    AW rds start-db-cluster --db-cluster-identifier "$cluster" >/dev/null
+    ;;
   esac
 }
 wait_cluster() {
@@ -194,8 +225,8 @@ step "Discovering EB environments (profile: $PROFILE, region: $REGION)..."
 mapfile -t ALL_ENVS < <(
   AW elasticbeanstalk describe-environments \
     --query 'Environments[?Status!=`Terminated`].EnvironmentName' \
-    --output text \
-  | tr '\t' '\n' | sort
+    --output text |
+    tr '\t' '\n' | sort
 )
 [[ ${#ALL_ENVS[@]} -eq 0 ]] && die "No active EB environments found in this account/region"
 log "Found: ${ALL_ENVS[*]}"
@@ -218,7 +249,10 @@ for env in "${ALL_ENVS[@]}"; do
     log "EB application: $APP_NAME"
   fi
   asg=$(eb_asg_name "$env")
-  [[ -z "$asg" || "$asg" == "None" ]] && { warn "$env: no ASG found"; continue; }
+  [[ -z "$asg" || "$asg" == "None" ]] && {
+    warn "$env: no ASG found"
+    continue
+  }
   ALL_ENV_ASGS[$env]="$asg"
   known_clusters=("${ALL_ENV_CLUSTERS[@]:-}")
   cluster=$(rds_cluster_id "$env" "$APP_NAME" "${known_clusters[@]:-}")
@@ -240,7 +274,7 @@ if [[ "$DIRECTION" == "down" ]]; then
   for env in "${TARGET_ENVS[@]}"; do
     asg="${ALL_ENV_ASGS[$env]:-}"
     [[ -z "$asg" ]] && continue
-    scale_asg "$asg" 0 0
+    scale_asg "$asg" 0 0 0
   done
   step "Stopping RDS clusters..."
   for cluster in "${!TARGET_CLUSTERS[@]}"; do
@@ -264,7 +298,7 @@ else
   for env in "${TARGET_ENVS[@]}"; do
     asg="${ALL_ENV_ASGS[$env]:-}"
     [[ -z "$asg" ]] && continue
-    scale_asg "$asg" 1 1
+    scale_asg "$asg" 1 1 1
   done
 fi
 step "Done — ${DIRECTION}"

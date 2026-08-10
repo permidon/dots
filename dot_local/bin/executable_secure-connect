@@ -358,4 +358,3 @@ if __name__ == '__main__':
 
   if cleanup_process.is_alive():
     cleanup_process.join()
-
