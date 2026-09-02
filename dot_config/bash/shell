@@ -1,6 +1,7 @@
 # History control
 shopt -s histappend
-PROMPT_COMMAND='history -a; history -c; history -r'
+PROMPT_COMMAND=(history_sync)
+history_sync() { history -a; history -c; history -r; }
 
 # Autocompletion
 if [[ ! -v BASH_COMPLETION_VERSINFO && -f /usr/share/bash-completion/bash_completion ]]; then

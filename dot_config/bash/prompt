@@ -39,6 +39,6 @@ function set_git_prompt {
   PS1="${c_user}\u@\h ${c_path}\w${c_reset}${git_segment}\n${arrow_color}❯${c_reset} "
 }
 
-PROMPT_COMMAND=set_git_prompt
+PROMPT_COMMAND+=(set_git_prompt)
 
 export PS1
