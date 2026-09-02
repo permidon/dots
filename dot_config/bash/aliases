@@ -71,8 +71,8 @@ alias restore-dome="cat ~/.bak/db/dumps/bp-wip-mysql.dump | docker exec -i mysql
 
 alias init-dome="rm ./.elasticbeanstalk/config.yml ; eb init --profile=dome"
 alias init-test="rm ./.elasticbeanstalk/config.yml ; eb init --profile=test"
-alias ssh-dome="bp-secure-connect --beanstalk --profile=dome --region=us-east-1"
-alias ssh-test="bp-secure-connect --beanstalk --profile=test --region=us-east-1"
+alias ssh-dome="secure-connect --beanstalk --profile=dome --region=us-east-1"
+alias ssh-test="secure-connect --beanstalk --profile=test --region=us-east-1"
 alias ssh-git="ssh gitlab"
 
 alias deploy-dev="eb use Development --profile=test; eb deploy Development --profile=test -nh"
