@@ -1,6 +1,6 @@
 # History control
 shopt -s histappend
-PROMPT_COMMAND=(history_sync)
+PROMPT_COMMAND+=(history_sync)
 history_sync() { history -a; history -c; history -r; }
 
 # Autocompletion
