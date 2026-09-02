@@ -33,7 +33,7 @@ menu() {
 
   case $MENU_CMD in
   fuzzel) printf '%b' "$options" | fuzzel --dmenu --prompt "$prompt… " --lines "$lines" --width 22 ;;
-  wofi) printf '%b' "$options" | wofi --dmenu --prompt "$prompt…" --lines "$((lines + 1))" --width 295 --cache-file /dev/null ;;
+  wofi) printf '%b' "$options" | wofi --dmenu -i --prompt "$prompt…" --lines "$((lines + 1))" --width 295 --cache-file /dev/null ;;
   rofi) printf '%b' "$options" | rofi -dmenu -i -p "$prompt" -lines "$lines" ;;
   bemenu) printf '%b' "$options" | bemenu --prompt "$prompt" --list "$lines" --ignorecase ;;
   tofi) printf '%b' "$options" | tofi --prompt-text "$prompt: " ;;

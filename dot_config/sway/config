@@ -69,7 +69,6 @@ input "type:keyboard" {
 #
     # Start a terminal
     bindsym $mod+Return exec $term
-    bindsym $mod+t exec $term
 
     # Kill focused window
     bindsym $mod+w kill
@@ -79,8 +78,10 @@ input "type:keyboard" {
 
     bindsym $mod+f exec nautilus --new-window
     bindsym $mod+b exec firefox
-    bindsym $mod+g exec code
-    bindsym $mod+s exec slack
+    bindsym $mod+n exec obsidian
+    bindsym $mod+t exec telegram
+    bindsym $mod+e exec flatpak run com.visualstudio.code
+    bindsym $mod+s exec flatpak run com.slack.Slack
 
     # Drag floating windows by holding down $mod and left mouse button.
     # Resize them with right mouse button + $mod.
