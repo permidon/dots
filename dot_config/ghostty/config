@@ -1,0 +1,47 @@
+# ~/.config/ghostty/config
+
+# Colors
+config-file = ?"~/.config/ghostty/theme"
+
+# Vars
+env = TERM=xterm-256color
+
+# Font
+font-family = "BerkeleyMono Nerd Font"
+font-style = "Regular"
+font-family-bold = "BerkeleyMono Nerd Font"
+font-style-bold = "Bold"
+font-family-italic = "BerkeleyMono Nerd Font"
+font-style-italic = "Italic"
+font-size = 16
+
+# Window
+window-decoration = false
+window-padding-x = 8
+window-padding-y = 8
+window-padding-balance = true
+window-save-state = always
+resize-overlay = never
+gtk-toolbar-style = flat
+
+# Cursor
+cursor-style = "block"
+cursor-style-blink = false
+
+# Shell
+shell-integration-features = no-cursor,sudo,no-title,ssh-env
+
+# Slowdown mouse scrolling
+mouse-scroll-multiplier = 0.95
+mouse-hide-while-typing = true
+
+# Misc
+macos-titlebar-style = hidden
+quit-after-last-window-closed = true
+confirm-close-surface=false
+app-notifications = no-clipboard-copy
+
+# Keybindings
+keybind = f11=toggle_fullscreen
+keybind = shift+insert=paste_from_clipboard
+keybind = ctrl+insert=copy_to_clipboard
