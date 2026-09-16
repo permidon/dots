@@ -3,15 +3,12 @@
 # Colors
 config-file = ?"~/.config/ghostty/theme"
 
-# Vars
-env = TERM=xterm-256color
-
 # Font
-font-family = "BerkeleyMono Nerd Font"
+font-family = "Berkeley Mono"
 font-style = "Regular"
-font-family-bold = "BerkeleyMono Nerd Font"
+font-family-bold = "Berkeley Mono"
 font-style-bold = "Bold"
-font-family-italic = "BerkeleyMono Nerd Font"
+font-family-italic = "Berkeley Mono"
 font-style-italic = "Italic"
 font-size = 16
 
@@ -29,7 +26,7 @@ cursor-style = "block"
 cursor-style-blink = false
 
 # Shell
-shell-integration-features = no-cursor,sudo,no-title,ssh-env
+shell-integration-features = no-cursor,sudo,no-title
 
 # Slowdown mouse scrolling
 mouse-scroll-multiplier = 0.95
