@@ -14,7 +14,7 @@ set $down j
 set $up k
 set $right l
 # Your preferred terminal emulator
-set $term alacritty
+set $term ghostty
 # Your preferred application launcher
 set $menu wofi --show drun
 
@@ -79,7 +79,7 @@ input "type:keyboard" {
     bindsym $mod+f exec nautilus --new-window
     bindsym $mod+b exec firefox
     bindsym $mod+n exec obsidian
-    bindsym $mod+t exec telegram
+    bindsym $mod+t exec Telegram
     bindsym $mod+e exec flatpak run com.visualstudio.code
     bindsym $mod+s exec flatpak run com.slack.Slack
 
@@ -158,7 +158,7 @@ input "type:keyboard" {
     # Switch the current container between different layout styles
     # bindsym $mod+s layout stacking
     # bindsym $mod+w layout tabbed
-    bindsym $mod+e layout toggle split
+    bindsym $mod+g layout toggle split
 
     # Make the current focus fullscreen
     bindsym $mod+Shift+f fullscreen
