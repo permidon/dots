@@ -39,7 +39,7 @@ alias gb='g branch '
 alias gc='g commit -m'
 alias gx='g commit -a --amend'
 alias gd='g diff'
-alias go='g checkout '
+alias go='g switch '
 alias gl='g lg'
 
 alias be='bundle exec'
@@ -78,6 +78,7 @@ alias ssh-git="ssh gitlab"
 alias deploy-dev="eb use Development --profile=test; eb deploy Development --profile=test -nh"
 alias deploy-tst1="eb use Testing1 --profile=test; eb deploy Testing1 --profile=test -nh"
 alias deploy-tst2="eb use Testing2 --profile=test; eb deploy Testing2 --profile=test -nh"
+alias deploy-tst3="eb use Testing3 --profile=test; eb deploy Testing3 --profile=test -nh"
 alias deploy-stg="eb use Staging --profile=dome; eb deploy Staging --profile=dome -nh"
 alias deploy-prd="eb use Production --profile=dome; eb deploy Production --profile=dome -nh"
 
